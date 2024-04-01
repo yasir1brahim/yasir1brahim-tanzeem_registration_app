@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "981951535583",
+    "project_id": "registration-newapp",
+    "storage_bucket": "registration-newapp.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:981951535583:android:1c5852a81c916e3b764c6a",
+        "android_client_info": {
+          "package_name": "com.tanzeem.registration_newapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCdKROYeRUvlaJkqSIg1N4g5VRPF-QyI2g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
