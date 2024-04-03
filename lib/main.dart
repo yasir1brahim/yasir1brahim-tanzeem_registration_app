@@ -22,7 +22,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Form Submission',
+      title: 'Tanzeem Registration App',
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
@@ -42,16 +42,10 @@ class _MyHomePageState extends State<MyHomePage> {
   String _phone = '03';
   String _fullName = '';
   int _age = 0;
-  String _profession = '';
-  String _email = '';
+  String? _profession; // Updated to allow null value
+  String? _email;
 
-  final List<String> _professions = [
-    'Select Profession',
-    'Engineer',
-    'Doctor',
-    'Driver',
-    'Other'
-  ];
+  final List<String> _professions = ['Engineer', 'Doctor', 'Driver', 'Other'];
 
   @override
   Widget build(BuildContext context) {
@@ -74,7 +68,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 children: [
                   TextFormField(
                     decoration: InputDecoration(labelText: 'Phone Number'),
-                    initialValue: _phone,
+                    initialValue: '03',
                     keyboardType: TextInputType.number,
                     validator: (value) {
                       if (value == null || value.isEmpty) {
@@ -86,7 +80,9 @@ class _MyHomePageState extends State<MyHomePage> {
                       return null;
                     },
                     onChanged: (value) {
-                      _phone = value;
+                      setState(() {
+                        _phone = value; // Update phone number
+                      });
                     },
                   ),
                   TextFormField(
@@ -98,7 +94,9 @@ class _MyHomePageState extends State<MyHomePage> {
                       return null;
                     },
                     onChanged: (value) {
-                      _fullName = value;
+                      setState(() {
+                        _fullName = value; // Update full name
+                      });
                     },
                   ),
                   TextFormField(
@@ -115,12 +113,14 @@ class _MyHomePageState extends State<MyHomePage> {
                       return null;
                     },
                     onChanged: (value) {
-                      _age = int.tryParse(value) ?? 0;
+                      setState(() {
+                        _age = int.tryParse(value) ?? 0; // Update age
+                      });
                     },
                   ),
-                  DropdownButtonFormField(
+                  DropdownButtonFormField<String>(
                     decoration: InputDecoration(labelText: 'Profession'),
-                    value: _profession.isNotEmpty ? _profession : null,
+                    value: null, // Use nullable value
                     items: _professions.map((profession) {
                       return DropdownMenuItem(
                         value: profession,
@@ -129,13 +129,11 @@ class _MyHomePageState extends State<MyHomePage> {
                     }).toList(),
                     onChanged: (value) {
                       setState(() {
-                        _profession = value.toString();
+                        _profession = value; // Update profession
                       });
                     },
                     validator: (value) {
-                      if (value == null ||
-                          value.isEmpty ||
-                          value == _professions.first) {
+                      if (value == null || value.isEmpty) {
                         return 'Profession is required';
                       }
                       return null;
@@ -143,9 +141,12 @@ class _MyHomePageState extends State<MyHomePage> {
                   ),
                   TextFormField(
                     decoration: InputDecoration(labelText: 'Email (Optional)'),
+                    initialValue: null,
                     keyboardType: TextInputType.emailAddress,
                     onChanged: (value) {
-                      _email = value;
+                      setState(() {
+                        _email = value; // Update email
+                      });
                     },
                   ),
                   SizedBox(height: 20),
@@ -158,7 +159,12 @@ class _MyHomePageState extends State<MyHomePage> {
                       ),
                       ElevatedButton(
                         onPressed: () {
-                          _formKey.currentState!.reset();
+                          setState(() {
+                            _phone = '03'; // Reset phone number immediately
+                            _profession = null; // Reset profession
+                            _email = null; // Reset null
+                          });
+                          _formKey.currentState!.reset(); // Reset the form
                         },
                         child: Text('Clear'),
                       ),
@@ -176,26 +182,75 @@ class _MyHomePageState extends State<MyHomePage> {
   void _submitForm() async {
     if (_formKey.currentState!.validate()) {
       _showSubmittingDialog(); // Show submitting dialog immediately
+
+      bool isConnected = await _isConnected();
       bool existsOnline = await checkIfUserExistsOnline();
       bool existsOffline = await checkIfUserExistsOffline();
 
-      if (existsOnline || existsOffline) {
-        Navigator.pop(context); // Dismiss the submitting dialog
-        _showErrorDialog('User already exists in the database.');
-      } else {
-        bool isConnected = await _isConnected();
-        if (isConnected) {
+      if (isConnected) {
+        if (existsOnline) {
+          // User exists online, update the existing record
           await saveFormData();
+
           Navigator.pop(context); // Dismiss the submitting dialog
-          _showSuccessDialog('Form submitted successfully.');
+          _showSuccessDialog('Record updated successfully.');
+          setState(() {
+            _phone = '03'; // Reset phone number immediately
+            _profession = null; // Reset profession
+            _email = null;
+          });
           _formKey.currentState!.reset();
         } else {
+          // User does not exist online, create a new record
+          await saveFormData();
+
           Navigator.pop(context); // Dismiss the submitting dialog
           _showSuccessDialog('Form submitted successfully.');
+          setState(() {
+            _phone = '03'; // Reset phone number immediately
+            _profession = null; // Reset profession
+            _email = null;
+          });
+          _formKey.currentState!.reset();
+        }
+      } else {
+        // User is offline, save data locally
+
+        if (existsOffline) {
+          // User exists offline, update the existing record
+          Navigator.pop(context); // Dismiss the submitting dialog
+          _showSuccessDialog('Record saved and will be updated successfully!');
           await saveFormDataLocally();
+          setState(() {
+            _phone = '03'; // Reset phone number immediately
+            _profession = null; // Reset profession
+            _email = null;
+          });
+          _formKey.currentState!.reset();
+        } else {
+          // User does not exist offline, create a new record
+
+          Navigator.pop(context); // Dismiss the submitting dialog
+          _showSuccessDialog(
+              'Form submitted successfully in offline mode and will be synced.');
+          await saveFormDataLocally();
+          setState(() {
+            _phone = '03'; // Reset phone number immediately
+            _profession = null; // Reset profession
+            _email = null;
+          });
           _formKey.currentState!.reset();
         }
       }
+
+      // Reset form fields and dismiss dialog
+      // setState(() {
+      //   _phone = '03'; // Reset phone number immediately
+      //   _profession = null; // Reset profession
+      //   _email = null; // Reset email
+      // });
+      // _formKey.currentState!.reset(); // Reset the form
+      // Navigator.pop(context); // Dismiss the submitting dialog
     }
   }
 
@@ -205,13 +260,14 @@ class _MyHomePageState extends State<MyHomePage> {
         .where('phone', isEqualTo: _phone)
         .get();
     final List<DocumentSnapshot> documents = result.docs;
+    print(documents);
     return documents.isNotEmpty;
   }
 
   Future<bool> checkIfUserExistsOffline() async {
     // Simulate offline check by querying local data
     final QuerySnapshot result = await FirebaseFirestore.instance
-        .collection('local_forms')
+        .collection('forms')
         .where('phone', isEqualTo: _phone)
         .get();
     final List<DocumentSnapshot> documents = result.docs;
@@ -219,24 +275,48 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Future<void> saveFormData() async {
-    await FirebaseFirestore.instance.collection('forms').add({
-      'phone': _phone,
-      'fullName': _fullName,
-      'age': _age,
-      'profession': _profession,
-      'email': _email,
-    });
+    bool existsOnline = await checkIfUserExistsOnline();
+    if (existsOnline) {
+      await FirebaseFirestore.instance.collection('forms').doc(_phone).update({
+        'fullName': _fullName,
+        'age': _age,
+        'profession': _profession,
+        // 'email': _email,
+        'email': _email != null && _email!.isNotEmpty ? _email : null,
+      });
+    } else {
+      await FirebaseFirestore.instance.collection('forms').doc(_phone).set({
+        'phone': _phone,
+        'fullName': _fullName,
+        'age': _age,
+        'profession': _profession,
+        // 'email': _email,
+        'email': _email != null && _email!.isNotEmpty ? _email : null,
+      });
+    }
     print('Form data saved successfully.');
   }
 
   Future<void> saveFormDataLocally() async {
-    await FirebaseFirestore.instance.collection('local_forms').add({
-      'phone': _phone,
-      'fullName': _fullName,
-      'age': _age,
-      'profession': _profession,
-      'email': _email,
-    });
+    bool existsOnline = await checkIfUserExistsOnline();
+    if (existsOnline) {
+      await FirebaseFirestore.instance.collection('forms').doc(_phone).update({
+        'fullName': _fullName,
+        'age': _age,
+        'profession': _profession,
+        // 'email': _email,
+        'email': _email != null && _email!.isNotEmpty ? _email : null,
+      });
+    } else {
+      await FirebaseFirestore.instance.collection('forms').doc(_phone).set({
+        'phone': _phone,
+        'fullName': _fullName,
+        'age': _age,
+        'profession': _profession,
+        // 'email': _email,
+        'email': _email != null && _email!.isNotEmpty ? _email : null,
+      });
+    }
     print('Form data saved locally.');
   }
 
