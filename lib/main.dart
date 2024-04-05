@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:sqflite/sqflite.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -14,6 +15,7 @@ void main() async {
       storageBucket: 'registration-newapp.appspot.com',
     ),
   );
+
   runApp(MyApp());
 }
 
@@ -42,10 +44,27 @@ class _MyHomePageState extends State<MyHomePage> {
   String _phone = '03';
   String _fullName = '';
   int _age = 0;
-  String? _profession; // Updated to allow null value
+  String? _profession;
   String? _email;
 
   final List<String> _professions = ['Engineer', 'Doctor', 'Driver', 'Other'];
+
+  late Database _database;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeDatabase();
+    _syncDataWithFirestoreOnConnection();
+  }
+
+  void _initializeDatabase() async {
+    _database = await openDatabase('registration.db', version: 1,
+        onCreate: (Database db, int version) async {
+      await db.execute(
+          'CREATE TABLE forms (id INTEGER PRIMARY KEY, phone TEXT, fullName TEXT, age INTEGER, profession TEXT, email TEXT)');
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -81,7 +100,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     },
                     onChanged: (value) {
                       setState(() {
-                        _phone = value; // Update phone number
+                        _phone = value;
                       });
                     },
                   ),
@@ -95,7 +114,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     },
                     onChanged: (value) {
                       setState(() {
-                        _fullName = value; // Update full name
+                        _fullName = value;
                       });
                     },
                   ),
@@ -114,13 +133,13 @@ class _MyHomePageState extends State<MyHomePage> {
                     },
                     onChanged: (value) {
                       setState(() {
-                        _age = int.tryParse(value) ?? 0; // Update age
+                        _age = int.tryParse(value) ?? 0;
                       });
                     },
                   ),
                   DropdownButtonFormField<String>(
                     decoration: InputDecoration(labelText: 'Profession'),
-                    value: null, // Use nullable value
+                    value: null,
                     items: _professions.map((profession) {
                       return DropdownMenuItem(
                         value: profession,
@@ -129,7 +148,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     }).toList(),
                     onChanged: (value) {
                       setState(() {
-                        _profession = value; // Update profession
+                        _profession = value;
                       });
                     },
                     validator: (value) {
@@ -141,11 +160,11 @@ class _MyHomePageState extends State<MyHomePage> {
                   ),
                   TextFormField(
                     decoration: InputDecoration(labelText: 'Email (Optional)'),
-                    initialValue: null,
+                    initialValue: _email,
                     keyboardType: TextInputType.emailAddress,
                     onChanged: (value) {
                       setState(() {
-                        _email = value; // Update email
+                        _email = value;
                       });
                     },
                   ),
@@ -160,11 +179,11 @@ class _MyHomePageState extends State<MyHomePage> {
                       ElevatedButton(
                         onPressed: () {
                           setState(() {
-                            _phone = '03'; // Reset phone number immediately
-                            _profession = null; // Reset profession
-                            _email = null; // Reset null
+                            _phone = '03';
+                            _profession = null;
+                            _email = null;
                           });
-                          _formKey.currentState!.reset(); // Reset the form
+                          _formKey.currentState!.reset();
                         },
                         child: Text('Clear'),
                       ),
@@ -181,76 +200,38 @@ class _MyHomePageState extends State<MyHomePage> {
 
   void _submitForm() async {
     if (_formKey.currentState!.validate()) {
-      _showSubmittingDialog(); // Show submitting dialog immediately
+      _showSubmittingDialog();
 
       bool isConnected = await _isConnected();
       bool existsOnline = await checkIfUserExistsOnline();
       bool existsOffline = await checkIfUserExistsOffline();
 
       if (isConnected) {
-        if (existsOnline) {
-          // User exists online, update the existing record
-          await saveFormData();
-
+        if (existsOnline || existsOffline) {
+          await saveFormDataFirestore(updateIfExists: true);
           Navigator.pop(context); // Dismiss the submitting dialog
-          _showSuccessDialog('Record updated successfully.');
-          setState(() {
-            _phone = '03'; // Reset phone number immediately
-            _profession = null; // Reset profession
-            _email = null;
-          });
-          _formKey.currentState!.reset();
+          _showErrorDialog('Record updated successfully.');
         } else {
-          // User does not exist online, create a new record
-          await saveFormData();
-
+          await saveFormDataFirestore(updateIfExists: false);
           Navigator.pop(context); // Dismiss the submitting dialog
           _showSuccessDialog('Form submitted successfully.');
-          setState(() {
-            _phone = '03'; // Reset phone number immediately
-            _profession = null; // Reset profession
-            _email = null;
-          });
-          _formKey.currentState!.reset();
         }
       } else {
-        // User is offline, save data locally
-
-        if (existsOffline) {
-          // User exists offline, update the existing record
+        if (existsOffline || existsOnline) {
+          await saveFormDataSQLite(updateIfExists: true);
           Navigator.pop(context); // Dismiss the submitting dialog
-          _showSuccessDialog('Record saved and will be updated successfully!');
-          await saveFormDataLocally();
-          setState(() {
-            _phone = '03'; // Reset phone number immediately
-            _profession = null; // Reset profession
-            _email = null;
-          });
-          _formKey.currentState!.reset();
+          _showErrorDialog('Record updated successfully.');
         } else {
-          // User does not exist offline, create a new record
-
+          await saveFormDataSQLite(updateIfExists: false);
           Navigator.pop(context); // Dismiss the submitting dialog
-          _showSuccessDialog(
-              'Form submitted successfully in offline mode and will be synced.');
-          await saveFormDataLocally();
-          setState(() {
-            _phone = '03'; // Reset phone number immediately
-            _profession = null; // Reset profession
-            _email = null;
-          });
-          _formKey.currentState!.reset();
+          _showSuccessDialog('Form submitted successfully.');
         }
       }
 
-      // Reset form fields and dismiss dialog
-      // setState(() {
-      //   _phone = '03'; // Reset phone number immediately
-      //   _profession = null; // Reset profession
-      //   _email = null; // Reset email
-      // });
-      // _formKey.currentState!.reset(); // Reset the form
-      // Navigator.pop(context); // Dismiss the submitting dialog
+      setState(() {
+        _profession = null;
+      });
+      _formKey.currentState!.reset();
     }
   }
 
@@ -260,70 +241,80 @@ class _MyHomePageState extends State<MyHomePage> {
         .where('phone', isEqualTo: _phone)
         .get();
     final List<DocumentSnapshot> documents = result.docs;
-    print(documents);
     return documents.isNotEmpty;
   }
 
   Future<bool> checkIfUserExistsOffline() async {
-    // Simulate offline check by querying local data
-    final QuerySnapshot result = await FirebaseFirestore.instance
-        .collection('forms')
-        .where('phone', isEqualTo: _phone)
-        .get();
-    final List<DocumentSnapshot> documents = result.docs;
-    return documents.isNotEmpty;
+    final List<Map<String, dynamic>> result = await _database
+        .rawQuery('SELECT * FROM forms WHERE phone = ?', [_phone]);
+    return result.isNotEmpty;
   }
 
-  Future<void> saveFormData() async {
-    bool existsOnline = await checkIfUserExistsOnline();
-    if (existsOnline) {
-      await FirebaseFirestore.instance.collection('forms').doc(_phone).update({
+  Future<void> saveFormDataFirestore({required bool updateIfExists}) async {
+    final docRef = FirebaseFirestore.instance.collection('forms').doc(_phone);
+    final existsOnline = (await docRef.get()).exists;
+
+    if (existsOnline && updateIfExists) {
+      await docRef.update({
         'fullName': _fullName,
         'age': _age,
         'profession': _profession,
-        // 'email': _email,
-        'email': _email != null && _email!.isNotEmpty ? _email : null,
+        'email': _email,
       });
     } else {
-      await FirebaseFirestore.instance.collection('forms').doc(_phone).set({
+      await docRef.set({
         'phone': _phone,
         'fullName': _fullName,
         'age': _age,
         'profession': _profession,
-        // 'email': _email,
-        'email': _email != null && _email!.isNotEmpty ? _email : null,
+        'email': _email,
       });
     }
-    print('Form data saved successfully.');
   }
 
-  Future<void> saveFormDataLocally() async {
-    bool existsOnline = await checkIfUserExistsOnline();
-    if (existsOnline) {
-      await FirebaseFirestore.instance.collection('forms').doc(_phone).update({
-        'fullName': _fullName,
-        'age': _age,
-        'profession': _profession,
-        // 'email': _email,
-        'email': _email != null && _email!.isNotEmpty ? _email : null,
-      });
+  Future<void> saveFormDataSQLite({required bool updateIfExists}) async {
+    final existsOffline = await checkIfUserExistsOffline();
+
+    if (existsOffline) {
+      if (updateIfExists) {
+        await _database.transaction((txn) async {
+          // Use batch operations for multiple updates
+          var batch = txn.batch();
+          batch.rawUpdate(
+              'UPDATE forms SET fullName = ?, age = ?, profession = ?, email = ? WHERE phone = ?',
+              [_fullName, _age, _profession, _email, _phone]);
+          await batch.commit(noResult: true);
+        });
+      } else {
+        await _database.transaction((txn) async {
+          // Use batch operations for multiple inserts
+          var batch = txn.batch();
+          batch.rawInsert(
+              'INSERT INTO forms(phone, fullName, age, profession, email) VALUES(?, ?, ?, ?, ?)',
+              [_phone, _fullName, _age, _profession, _email]);
+          await batch.commit(noResult: true);
+        });
+      }
     } else {
-      await FirebaseFirestore.instance.collection('forms').doc(_phone).set({
-        'phone': _phone,
-        'fullName': _fullName,
-        'age': _age,
-        'profession': _profession,
-        // 'email': _email,
-        'email': _email != null && _email!.isNotEmpty ? _email : null,
+      await _database.transaction((txn) async {
+        var batch = txn.batch();
+        await txn.rawInsert(
+            'INSERT INTO forms(phone, fullName, age, profession, email) VALUES(?, ?, ?, ?, ?)',
+            [_phone, _fullName, _age, _profession, _email]);
+        await batch.commit(noResult: true);
       });
     }
-    print('Form data saved locally.');
+  }
+
+  Future<bool> _isConnected() async {
+    var connectivityResult = await Connectivity().checkConnectivity();
+    return connectivityResult != ConnectivityResult.none;
   }
 
   void _showSubmittingDialog() {
     showDialog(
       context: context,
-      barrierDismissible: false, // Prevent dismissing dialog on outside tap
+      barrierDismissible: false,
       builder: (context) => AlertDialog(
         title: Text('Submitting'),
         content: Row(
@@ -359,8 +350,14 @@ class _MyHomePageState extends State<MyHomePage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Error'),
-        content: Text(message),
+        title: Text(
+          'Error',
+          style: TextStyle(color: Colors.red), // Set title color to red
+        ),
+        content: Text(
+          message,
+          style: TextStyle(color: Colors.red), // Set content text color to red
+        ),
         actions: [
           TextButton(
             onPressed: () {
@@ -373,8 +370,40 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
-  Future<bool> _isConnected() async {
-    var connectivityResult = await Connectivity().checkConnectivity();
-    return connectivityResult != ConnectivityResult.none;
+  void _syncDataWithFirestoreOnConnection() async {
+    Connectivity().onConnectivityChanged.listen((ConnectivityResult result) {
+      if (result == ConnectivityResult.mobile ||
+          result == ConnectivityResult.wifi) {
+        _syncDataWithFirestore();
+      }
+    });
+  }
+
+  void _syncDataWithFirestore() async {
+    final List<Map<String, dynamic>> records =
+        await _database.rawQuery('SELECT * FROM forms');
+
+    for (var record in records) {
+      final docRef =
+          FirebaseFirestore.instance.collection('forms').doc(record['phone']);
+      final existsOnline = (await docRef.get()).exists;
+
+      if (existsOnline) {
+        await docRef.update({
+          'fullName': record['fullName'],
+          'age': record['age'],
+          'profession': record['profession'],
+          'email': record['email'],
+        });
+      } else {
+        await docRef.set({
+          'phone': record['phone'],
+          'fullName': record['fullName'],
+          'age': record['age'],
+          'profession': record['profession'],
+          'email': record['email'],
+        });
+      }
+    }
   }
 }
