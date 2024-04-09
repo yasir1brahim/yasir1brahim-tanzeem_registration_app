@@ -28,33 +28,102 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: MyHomePage(),
+      home: FirstScreen(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
+class FirstScreen extends StatelessWidget {
+  final TextEditingController _phoneController =
+      TextEditingController(text: '03');
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+
   @override
-  _MyHomePageState createState() => _MyHomePageState();
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Tanzeem Registration App'),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Form(
+              key: _formKey,
+              child: TextFormField(
+                controller: _phoneController,
+                decoration: InputDecoration(labelText: 'Phone Number'),
+                keyboardType: TextInputType.number,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Phone number is required';
+                  } else if (value.length != 11 || !value.startsWith('03')) {
+                    return 'Enter a valid phone number starting with "03"';
+                  }
+                  return null;
+                },
+              ),
+            ),
+            SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                ElevatedButton(
+                  onPressed: () {
+                    if (_formKey.currentState!.validate()) {
+                      final phoneNumber = _phoneController.text;
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => SecondScreen(
+                            phoneNumber: phoneNumber,
+                          ),
+                        ),
+                      );
+                    }
+                  },
+                  child: Text('Enter Number'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    _phoneController.clear();
+                  },
+                  child: Text('Clear Number'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  final _formKey = GlobalKey<FormState>();
+class SecondScreen extends StatefulWidget {
+  final String phoneNumber;
 
-  String _phone = '03';
-  String _fullName = '';
-  int _age = 0;
+  const SecondScreen({Key? key, required this.phoneNumber}) : super(key: key);
+
+  @override
+  _SecondScreenState createState() => _SecondScreenState();
+}
+
+class _SecondScreenState extends State<SecondScreen> {
+  final TextEditingController _fullNameController = TextEditingController();
+  final TextEditingController _ageController = TextEditingController();
   String? _profession;
-  String? _email;
-
-  final List<String> _professions = ['Engineer', 'Doctor', 'Driver', 'Other'];
-
+  final TextEditingController _emailController = TextEditingController();
   late Database _database;
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  bool _isSubmitting = false;
 
   @override
   void initState() {
     super.initState();
     _initializeDatabase();
+    _fetchUserData();
+    _syncDataWithFirestore();
     _syncDataWithFirestoreOnConnection();
   }
 
@@ -62,135 +131,103 @@ class _MyHomePageState extends State<MyHomePage> {
     _database = await openDatabase('registration.db', version: 1,
         onCreate: (Database db, int version) async {
       await db.execute(
-          'CREATE TABLE forms (id INTEGER PRIMARY KEY, phone TEXT, fullName TEXT, age INTEGER, profession TEXT, email TEXT)');
+          'CREATE TABLE IF NOT EXISTS forms (id INTEGER PRIMARY KEY, phone TEXT, fullName TEXT, age INTEGER, profession TEXT, email TEXT)');
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Scaffold(
-        appBar: AppBar(
-          backgroundColor: Colors.teal.shade900,
-          foregroundColor: Colors.white,
-          title: Center(
-            child: Text('Tanzeem Registration App'),
-          ),
-        ),
-        body: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextFormField(
-                    decoration: InputDecoration(labelText: 'Phone Number'),
-                    initialValue: '03',
-                    keyboardType: TextInputType.number,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Phone number is required';
-                      } else if (value.length != 11 ||
-                          !value.startsWith('03')) {
-                        return 'Enter a valid phone number starting with "03"';
-                      }
-                      return null;
-                    },
-                    onChanged: (value) {
-                      setState(() {
-                        _phone = value;
-                      });
-                    },
-                  ),
-                  TextFormField(
-                    decoration: InputDecoration(labelText: 'Full Name'),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Full Name is required';
-                      }
-                      return null;
-                    },
-                    onChanged: (value) {
-                      setState(() {
-                        _fullName = value;
-                      });
-                    },
-                  ),
-                  TextFormField(
-                    decoration: InputDecoration(labelText: 'Age'),
-                    keyboardType: TextInputType.number,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Age is required';
-                      }
-                      int age = int.tryParse(value) ?? 0;
-                      if (age < 5 || age > 100) {
-                        return 'Age must be between 5 and 100';
-                      }
-                      return null;
-                    },
-                    onChanged: (value) {
-                      setState(() {
-                        _age = int.tryParse(value) ?? 0;
-                      });
-                    },
-                  ),
-                  DropdownButtonFormField<String>(
-                    decoration: InputDecoration(labelText: 'Profession'),
-                    value: null,
-                    items: _professions.map((profession) {
-                      return DropdownMenuItem(
-                        value: profession,
-                        child: Text(profession),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        _profession = value;
-                      });
-                    },
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Profession is required';
-                      }
-                      return null;
-                    },
-                  ),
-                  TextFormField(
-                    decoration: InputDecoration(labelText: 'Email (Optional)'),
-                    initialValue: _email,
-                    keyboardType: TextInputType.emailAddress,
-                    onChanged: (value) {
-                      setState(() {
-                        _email = value;
-                      });
-                    },
-                  ),
-                  SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      ElevatedButton(
-                        onPressed: () => _submitForm(),
-                        child: Text('Submit'),
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Tanzeem Registration App'),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextFormField(
+                  controller: _fullNameController,
+                  decoration: InputDecoration(labelText: 'Full Name'),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Full Name is required';
+                    }
+                    return null;
+                  },
+                ),
+                TextFormField(
+                  controller: _ageController,
+                  decoration: InputDecoration(labelText: 'Age'),
+                  keyboardType: TextInputType.number,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Age is required';
+                    }
+                    int age = int.tryParse(value) ?? 0;
+                    if (age < 5 || age > 100) {
+                      return 'Age must be between 5 and 100';
+                    }
+                    return null;
+                  },
+                ),
+                DropdownButtonFormField<String>(
+                  value: _profession,
+                  items: ['Engineer', 'Doctor', 'Driver', 'Other']
+                      .map((profession) {
+                    return DropdownMenuItem(
+                      value: profession,
+                      child: Text(profession),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    setState(() {
+                      _profession = value;
+                    });
+                  },
+                  decoration: InputDecoration(labelText: 'Profession'),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Profession is required';
+                    }
+                    return null;
+                  },
+                ),
+                TextFormField(
+                  controller: _emailController,
+                  decoration: InputDecoration(labelText: 'Email (Optional)'),
+                  keyboardType: TextInputType.emailAddress,
+                ),
+                SizedBox(height: 20),
+                _isSubmitting
+                    ? CircularProgressIndicator()
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          ElevatedButton(
+                            onPressed: () {
+                              _submitForm();
+                            },
+                            child: Text('Submit'),
+                          ),
+                          ElevatedButton(
+                            onPressed: () {
+                              _clearData();
+                            },
+                            child: Text('Clear Data'),
+                          ),
+                          ElevatedButton(
+                            onPressed: () {
+                              Navigator.pop(context);
+                            },
+                            child: Text('Go back'),
+                          ),
+                        ],
                       ),
-                      ElevatedButton(
-                        onPressed: () {
-                          setState(() {
-                            _phone = '03';
-                            _profession = null;
-                            _email = null;
-                          });
-                          _formKey.currentState!.reset();
-                        },
-                        child: Text('Clear'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+              ],
             ),
           ),
         ),
@@ -200,45 +237,58 @@ class _MyHomePageState extends State<MyHomePage> {
 
   void _submitForm() async {
     if (_formKey.currentState!.validate()) {
-      _showSubmittingDialog();
+      setState(() {
+        _isSubmitting = true;
+      });
 
       bool isConnected = await _isConnected();
-      bool existsOnline = await checkIfUserExistsOnline();
-      bool existsOffline = await checkIfUserExistsOffline();
 
       if (isConnected) {
+        bool existsOffline = await checkIfUserExistsOffline();
+        bool existsOnline = await checkIfUserExistsOnline();
         if (existsOnline || existsOffline) {
           await saveFormDataFirestore(updateIfExists: true);
-          Navigator.pop(context); // Dismiss the submitting dialog
+          setState(() {
+            _isSubmitting = false;
+          });
           _showErrorDialog('Record updated successfully.');
         } else {
           await saveFormDataFirestore(updateIfExists: false);
-          Navigator.pop(context); // Dismiss the submitting dialog
+          setState(() {
+            _isSubmitting = false;
+          });
           _showSuccessDialog('Form submitted successfully.');
         }
       } else {
-        if (existsOffline || existsOnline) {
+        bool existsOffline = await checkIfUserExistsOffline();
+        bool existsOnline = await checkIfUserExistsOnline();
+        if (existsOffline) {
           await saveFormDataSQLite(updateIfExists: true);
-          Navigator.pop(context); // Dismiss the submitting dialog
+          setState(() {
+            _isSubmitting = false;
+          });
+          _showErrorDialog('Record updated successfully.');
+        } else if (existsOnline) {
+          await saveFormDataSQLite(updateIfExists: true);
+          setState(() {
+            _isSubmitting = false;
+          });
           _showErrorDialog('Record updated successfully.');
         } else {
           await saveFormDataSQLite(updateIfExists: false);
-          Navigator.pop(context); // Dismiss the submitting dialog
+          setState(() {
+            _isSubmitting = false;
+          });
           _showSuccessDialog('Form submitted successfully.');
         }
       }
-
-      setState(() {
-        _profession = null;
-      });
-      _formKey.currentState!.reset();
     }
   }
 
   Future<bool> checkIfUserExistsOnline() async {
     final QuerySnapshot result = await FirebaseFirestore.instance
         .collection('forms')
-        .where('phone', isEqualTo: _phone)
+        .where('phone', isEqualTo: widget.phoneNumber)
         .get();
     final List<DocumentSnapshot> documents = result.docs;
     return documents.isNotEmpty;
@@ -246,28 +296,29 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Future<bool> checkIfUserExistsOffline() async {
     final List<Map<String, dynamic>> result = await _database
-        .rawQuery('SELECT * FROM forms WHERE phone = ?', [_phone]);
+        .rawQuery('SELECT * FROM forms WHERE phone = ?', [widget.phoneNumber]);
     return result.isNotEmpty;
   }
 
   Future<void> saveFormDataFirestore({required bool updateIfExists}) async {
-    final docRef = FirebaseFirestore.instance.collection('forms').doc(_phone);
+    final docRef =
+        FirebaseFirestore.instance.collection('forms').doc(widget.phoneNumber);
     final existsOnline = (await docRef.get()).exists;
 
     if (existsOnline && updateIfExists) {
       await docRef.update({
-        'fullName': _fullName,
-        'age': _age,
+        'fullName': _fullNameController.text,
+        'age': int.tryParse(_ageController.text) ?? 0,
         'profession': _profession,
-        'email': _email,
+        'email': _emailController.text,
       });
     } else {
       await docRef.set({
-        'phone': _phone,
-        'fullName': _fullName,
-        'age': _age,
+        'phone': widget.phoneNumber,
+        'fullName': _fullNameController.text,
+        'age': int.tryParse(_ageController.text) ?? 0,
         'profession': _profession,
-        'email': _email,
+        'email': _emailController.text,
       });
     }
   }
@@ -282,7 +333,13 @@ class _MyHomePageState extends State<MyHomePage> {
           var batch = txn.batch();
           batch.rawUpdate(
               'UPDATE forms SET fullName = ?, age = ?, profession = ?, email = ? WHERE phone = ?',
-              [_fullName, _age, _profession, _email, _phone]);
+              [
+                _fullNameController.text,
+                int.tryParse(_ageController.text) ?? 0,
+                _profession,
+                _emailController.text,
+                widget.phoneNumber
+              ]);
           await batch.commit(noResult: true);
         });
       } else {
@@ -291,7 +348,13 @@ class _MyHomePageState extends State<MyHomePage> {
           var batch = txn.batch();
           batch.rawInsert(
               'INSERT INTO forms(phone, fullName, age, profession, email) VALUES(?, ?, ?, ?, ?)',
-              [_phone, _fullName, _age, _profession, _email]);
+              [
+                widget.phoneNumber,
+                _fullNameController.text,
+                int.tryParse(_ageController.text) ?? 0,
+                _profession,
+                _emailController.text
+              ]);
           await batch.commit(noResult: true);
         });
       }
@@ -300,7 +363,13 @@ class _MyHomePageState extends State<MyHomePage> {
         var batch = txn.batch();
         await txn.rawInsert(
             'INSERT INTO forms(phone, fullName, age, profession, email) VALUES(?, ?, ?, ?, ?)',
-            [_phone, _fullName, _age, _profession, _email]);
+            [
+              widget.phoneNumber,
+              _fullNameController.text,
+              int.tryParse(_ageController.text) ?? 0,
+              _profession,
+              _emailController.text
+            ]);
         await batch.commit(noResult: true);
       });
     }
@@ -309,23 +378,6 @@ class _MyHomePageState extends State<MyHomePage> {
   Future<bool> _isConnected() async {
     var connectivityResult = await Connectivity().checkConnectivity();
     return connectivityResult != ConnectivityResult.none;
-  }
-
-  void _showSubmittingDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: Text('Submitting'),
-        content: Row(
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(width: 16),
-            Text('Please wait...'),
-          ],
-        ),
-      ),
-    );
   }
 
   void _showSuccessDialog(String message) {
@@ -351,7 +403,7 @@ class _MyHomePageState extends State<MyHomePage> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(
-          'Error',
+          'Alert',
           style: TextStyle(color: Colors.red), // Set title color to red
         ),
         content: Text(
@@ -368,6 +420,89 @@ class _MyHomePageState extends State<MyHomePage> {
         ],
       ),
     );
+  }
+
+  void _fetchUserData() async {
+    bool isConnected = await _isConnected();
+
+    if (isConnected) {
+      final onlineData = await _fetchUserDataOnline();
+      if (onlineData != null) {
+        _showErrorDialog('Record Already Exists!');
+        setState(() {
+          _fullNameController.text = onlineData['fullName'];
+          _ageController.text = onlineData['age'].toString();
+          _profession = onlineData['profession'];
+          _emailController.text = onlineData['email'];
+        });
+      } else {
+        final offlineData = await _fetchUserDataOffline();
+        if (offlineData != null) {
+          _showErrorDialog('Record Already Exists');
+          setState(() {
+            _fullNameController.text = offlineData['fullName'];
+            _ageController.text = offlineData['age'].toString();
+            _profession = offlineData['profession'];
+            _emailController.text = offlineData['email'];
+          });
+        }
+      }
+    } else {
+      bool userExistsOnline = await checkIfUserExistsOnline();
+      if (userExistsOnline) {
+        final onlineData = await _fetchUserDataOnline();
+        if (onlineData != null) {
+          _showErrorDialog('Record Already Exists');
+          setState(() {
+            _fullNameController.text = onlineData['fullName'];
+            _ageController.text = onlineData['age'].toString();
+            _profession = onlineData['profession'];
+            _emailController.text = onlineData['email'];
+          });
+        }
+      } else {
+        final offlineData = await _fetchUserDataOffline();
+        if (offlineData != null) {
+          _showErrorDialog('Record Already Exists!');
+          setState(() {
+            _fullNameController.text = offlineData['fullName'];
+            _ageController.text = offlineData['age'].toString();
+            _profession = offlineData['profession'];
+            _emailController.text = offlineData['email'];
+          });
+        }
+      }
+    }
+  }
+
+  Future<Map<String, dynamic>?> _fetchUserDataOnline() async {
+    final docSnapshot = await FirebaseFirestore.instance
+        .collection('forms')
+        .doc(widget.phoneNumber)
+        .get();
+    if (docSnapshot.exists) {
+      return docSnapshot.data() as Map<String, dynamic>;
+    }
+    return null;
+  }
+
+  Future<Map<String, dynamic>?> _fetchUserDataOffline() async {
+    final List<Map<String, dynamic>> result = await _database
+        .rawQuery('SELECT * FROM forms WHERE phone = ?', [widget.phoneNumber]);
+    if (result.isNotEmpty) {
+      return result.first;
+    }
+    return null;
+  }
+
+  void _clearData() {
+    setState(() {
+      _fullNameController.clear();
+      _ageController.clear();
+      _profession = null;
+      _emailController.clear();
+    });
+    _formKey.currentState!.reset();
   }
 
   void _syncDataWithFirestoreOnConnection() async {
