@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="registration_newapp"
+        android:label="Tanzeem Registration"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

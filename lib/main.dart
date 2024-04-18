@@ -17,6 +17,148 @@ void main() async {
   );
 
   runApp(MyApp());
+
+  final databaseManager = DatabaseManager();
+  await databaseManager.initialize();
+  await databaseManager.syncDataWithFirestoreOnConnection();
+
+  var connectivityResult = await Connectivity().checkConnectivity();
+  if (connectivityResult != ConnectivityResult.none) {
+    // Initialize and sync data with Firestore
+    await databaseManager.syncDataWithFirestore();
+    await databaseManager.fetchAndSaveDataFromFirestore();
+  }
+}
+
+class DatabaseManager {
+  late Database _database;
+
+  Future<void> initialize() async {
+    _database = await openDatabase('registration.db', version: 1,
+        onCreate: (Database db, int version) async {
+      await db.execute(
+          'CREATE TABLE IF NOT EXISTS forms (id INTEGER PRIMARY KEY, phone TEXT, fullName TEXT, age INTEGER, profession TEXT, email TEXT)');
+    });
+  }
+
+  Future<void> syncDataWithFirestore() async {
+    final List<Map<String, dynamic>> records =
+        await _database.rawQuery('SELECT * FROM forms');
+    final batch = FirebaseFirestore.instance.batch();
+
+    for (var record in records) {
+      final docRef =
+          FirebaseFirestore.instance.collection('forms').doc(record['phone']);
+      final existsOnline = (await docRef.get()).exists;
+
+      if (existsOnline) {
+        batch.update(docRef, {
+          'fullName': record['fullName'],
+          'age': record['age'],
+          'profession': record['profession'],
+          'email': record['email'],
+        });
+      } else {
+        batch.set(docRef, {
+          'phone': record['phone'],
+          'fullName': record['fullName'],
+          'age': record['age'],
+          'profession': record['profession'],
+          'email': record['email'],
+        });
+      }
+    }
+
+    await batch.commit();
+  }
+
+  // Future<void> syncDataWithFirestore() async {
+  //   final List<Map<String, dynamic>> records =
+  //       await _database.rawQuery('SELECT * FROM forms');
+  //
+  //   for (var record in records) {
+  //     final docRef =
+  //         FirebaseFirestore.instance.collection('forms').doc(record['phone']);
+  //     final existsOnline = (await docRef.get()).exists;
+  //
+  //     if (existsOnline) {
+  //       await docRef.update({
+  //         'fullName': record['fullName'],
+  //         'age': record['age'],
+  //         'profession': record['profession'],
+  //         'email': record['email'],
+  //       });
+  //     } else {
+  //       await docRef.set({
+  //         'phone': record['phone'],
+  //         'fullName': record['fullName'],
+  //         'age': record['age'],
+  //         'profession': record['profession'],
+  //         'email': record['email'],
+  //       });
+  //     }
+  //   }
+  // }
+
+  Future<void> fetchAndSaveDataFromFirestore() async {
+    final snapshot = await FirebaseFirestore.instance.collection('forms').get();
+    final List<Map<String, dynamic>> documents = snapshot.docs.map((doc) {
+      return {
+        'phone': doc['phone'],
+        'fullName': doc['fullName'],
+        'age': doc['age'],
+        'profession': doc['profession'],
+        'email': doc['email'],
+      };
+    }).toList();
+
+    await _database.transaction((txn) async {
+      var batch = txn.batch();
+      for (var doc in documents) {
+        // Check if the record already exists in SQLite database
+        final List<Map<String, dynamic>> result = await txn.rawQuery(
+          'SELECT * FROM forms WHERE phone = ?',
+          [doc['phone']],
+        );
+
+        if (result.isNotEmpty) {
+          // Record exists, update it
+          batch.rawUpdate(
+            'UPDATE forms SET fullName = ?, age = ?, profession = ?, email = ? WHERE phone = ?',
+            [
+              doc['fullName'],
+              doc['age'],
+              doc['profession'],
+              doc['email'],
+              doc['phone'],
+            ],
+          );
+        } else {
+          // Record doesn't exist, insert it
+          batch.rawInsert(
+            'INSERT INTO forms(phone, fullName, age, profession, email) VALUES (?, ?, ?, ?, ?)',
+            [
+              doc['phone'],
+              doc['fullName'],
+              doc['age'],
+              doc['profession'],
+              doc['email'],
+            ],
+          );
+        }
+      }
+      await batch.commit(noResult: true);
+    });
+  }
+
+  Future<void> syncDataWithFirestoreOnConnection() async {
+    Connectivity().onConnectivityChanged.listen((ConnectivityResult result) {
+      if (result == ConnectivityResult.mobile ||
+          result == ConnectivityResult.wifi) {
+        syncDataWithFirestore();
+      }
+    });
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -42,7 +184,11 @@ class FirstScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Tanzeem Registration App'),
+        backgroundColor: Colors.teal.shade900,
+        foregroundColor: Colors.white,
+        title: Center(
+          child: Text('Tanzeem Registration App'),
+        ),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -139,7 +285,11 @@ class _SecondScreenState extends State<SecondScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Tanzeem Registration App'),
+        backgroundColor: Colors.teal.shade900,
+        foregroundColor: Colors.white,
+        title: Center(
+          child: Text('Tanzeem Registration App'),
+        ),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -196,11 +346,32 @@ class _SecondScreenState extends State<SecondScreen> {
                     return null;
                   },
                 ),
+                // TextFormField(
+                //   controller: _emailController,
+                //   decoration: InputDecoration(labelText: 'Email (Optional)'),
+                //   keyboardType: TextInputType.emailAddress,
+                // ),
                 TextFormField(
                   controller: _emailController,
                   decoration: InputDecoration(labelText: 'Email (Optional)'),
                   keyboardType: TextInputType.emailAddress,
+                  validator: (value) {
+                    if (value != null && value.isNotEmpty) {
+                      // Check if the entered email follows the email pattern
+                      // Regular expression for email validation
+                      final emailPattern = RegExp(
+                        r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                        caseSensitive: false,
+                        multiLine: false,
+                      );
+                      if (!emailPattern.hasMatch(value)) {
+                        return 'Enter a valid email address';
+                      }
+                    }
+                    return null;
+                  },
                 ),
+
                 SizedBox(height: 20),
                 _isSubmitting
                     ? CircularProgressIndicator()
@@ -215,6 +386,7 @@ class _SecondScreenState extends State<SecondScreen> {
                           ),
                           ElevatedButton(
                             onPressed: () {
+                              _formKey.currentState!.reset();
                               _clearData();
                             },
                             child: Text('Clear Data'),
@@ -248,12 +420,14 @@ class _SecondScreenState extends State<SecondScreen> {
         bool existsOnline = await checkIfUserExistsOnline();
         if (existsOnline || existsOffline) {
           await saveFormDataFirestore(updateIfExists: true);
+          await saveFormDataSQLite(updateIfExists: true);
           setState(() {
             _isSubmitting = false;
           });
           _showErrorDialog('Record updated successfully.');
         } else {
           await saveFormDataFirestore(updateIfExists: false);
+          await saveFormDataSQLite(updateIfExists: false);
           setState(() {
             _isSubmitting = false;
           });
@@ -261,20 +435,22 @@ class _SecondScreenState extends State<SecondScreen> {
         }
       } else {
         bool existsOffline = await checkIfUserExistsOffline();
-        bool existsOnline = await checkIfUserExistsOnline();
+        // bool existsOnline = await checkIfUserExistsOnline();
         if (existsOffline) {
           await saveFormDataSQLite(updateIfExists: true);
           setState(() {
             _isSubmitting = false;
           });
           _showErrorDialog('Record updated successfully.');
-        } else if (existsOnline) {
-          await saveFormDataSQLite(updateIfExists: true);
-          setState(() {
-            _isSubmitting = false;
-          });
-          _showErrorDialog('Record updated successfully.');
-        } else {
+        }
+        // else if (existsOnline) {
+        //   await saveFormDataSQLite(updateIfExists: true);
+        //   setState(() {
+        //     _isSubmitting = false;
+        //   });
+        //   _showErrorDialog('Record updated successfully.');
+        // }
+        else {
           await saveFormDataSQLite(updateIfExists: false);
           setState(() {
             _isSubmitting = false;
@@ -384,8 +560,14 @@ class _SecondScreenState extends State<SecondScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Success'),
-        content: Text(message),
+        title: Text(
+          'Success',
+          style: TextStyle(color: Colors.green),
+        ),
+        content: Text(
+          message,
+          style: TextStyle(color: Colors.green),
+        ),
         actions: [
           TextButton(
             onPressed: () {
@@ -448,29 +630,15 @@ class _SecondScreenState extends State<SecondScreen> {
         }
       }
     } else {
-      bool userExistsOnline = await checkIfUserExistsOnline();
-      if (userExistsOnline) {
-        final onlineData = await _fetchUserDataOnline();
-        if (onlineData != null) {
-          _showErrorDialog('Record Already Exists');
-          setState(() {
-            _fullNameController.text = onlineData['fullName'];
-            _ageController.text = onlineData['age'].toString();
-            _profession = onlineData['profession'];
-            _emailController.text = onlineData['email'];
-          });
-        }
-      } else {
-        final offlineData = await _fetchUserDataOffline();
-        if (offlineData != null) {
-          _showErrorDialog('Record Already Exists!');
-          setState(() {
-            _fullNameController.text = offlineData['fullName'];
-            _ageController.text = offlineData['age'].toString();
-            _profession = offlineData['profession'];
-            _emailController.text = offlineData['email'];
-          });
-        }
+      final offlineData = await _fetchUserDataOffline();
+      if (offlineData != null) {
+        _showErrorDialog('Record Already Exists!');
+        setState(() {
+          _fullNameController.text = offlineData['fullName'];
+          _ageController.text = offlineData['age'].toString();
+          _profession = offlineData['profession'];
+          _emailController.text = offlineData['email'];
+        });
       }
     }
   }
@@ -502,7 +670,6 @@ class _SecondScreenState extends State<SecondScreen> {
       _profession = null;
       _emailController.clear();
     });
-    _formKey.currentState!.reset();
   }
 
   void _syncDataWithFirestoreOnConnection() async {
@@ -514,9 +681,10 @@ class _SecondScreenState extends State<SecondScreen> {
     });
   }
 
-  void _syncDataWithFirestore() async {
+  Future<void> _syncDataWithFirestore() async {
     final List<Map<String, dynamic>> records =
         await _database.rawQuery('SELECT * FROM forms');
+    final batch = FirebaseFirestore.instance.batch();
 
     for (var record in records) {
       final docRef =
@@ -524,14 +692,14 @@ class _SecondScreenState extends State<SecondScreen> {
       final existsOnline = (await docRef.get()).exists;
 
       if (existsOnline) {
-        await docRef.update({
+        batch.update(docRef, {
           'fullName': record['fullName'],
           'age': record['age'],
           'profession': record['profession'],
           'email': record['email'],
         });
       } else {
-        await docRef.set({
+        batch.set(docRef, {
           'phone': record['phone'],
           'fullName': record['fullName'],
           'age': record['age'],
@@ -540,5 +708,35 @@ class _SecondScreenState extends State<SecondScreen> {
         });
       }
     }
+
+    await batch.commit();
   }
+
+  // void _syncDataWithFirestore() async {
+  //   final List<Map<String, dynamic>> records =
+  //       await _database.rawQuery('SELECT * FROM forms');
+  //
+  //   for (var record in records) {
+  //     final docRef =
+  //         FirebaseFirestore.instance.collection('forms').doc(record['phone']);
+  //     final existsOnline = (await docRef.get()).exists;
+  //
+  //     if (existsOnline) {
+  //       await docRef.update({
+  //         'fullName': record['fullName'],
+  //         'age': record['age'],
+  //         'profession': record['profession'],
+  //         'email': record['email'],
+  //       });
+  //     } else {
+  //       await docRef.set({
+  //         'phone': record['phone'],
+  //         'fullName': record['fullName'],
+  //         'age': record['age'],
+  //         'profession': record['profession'],
+  //         'email': record['email'],
+  //       });
+  //     }
+  //   }
+  // }
 }
