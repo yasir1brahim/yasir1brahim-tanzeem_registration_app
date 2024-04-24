@@ -72,34 +72,6 @@ class DatabaseManager {
     await batch.commit();
   }
 
-  // Future<void> syncDataWithFirestore() async {
-  //   final List<Map<String, dynamic>> records =
-  //       await _database.rawQuery('SELECT * FROM forms');
-  //
-  //   for (var record in records) {
-  //     final docRef =
-  //         FirebaseFirestore.instance.collection('forms').doc(record['phone']);
-  //     final existsOnline = (await docRef.get()).exists;
-  //
-  //     if (existsOnline) {
-  //       await docRef.update({
-  //         'fullName': record['fullName'],
-  //         'age': record['age'],
-  //         'profession': record['profession'],
-  //         'email': record['email'],
-  //       });
-  //     } else {
-  //       await docRef.set({
-  //         'phone': record['phone'],
-  //         'fullName': record['fullName'],
-  //         'age': record['age'],
-  //         'profession': record['profession'],
-  //         'email': record['email'],
-  //       });
-  //     }
-  //   }
-  // }
-
   Future<void> fetchAndSaveDataFromFirestore() async {
     final snapshot = await FirebaseFirestore.instance.collection('forms').get();
     final List<Map<String, dynamic>> documents = snapshot.docs.map((doc) {
@@ -346,11 +318,6 @@ class _SecondScreenState extends State<SecondScreen> {
                     return null;
                   },
                 ),
-                // TextFormField(
-                //   controller: _emailController,
-                //   decoration: InputDecoration(labelText: 'Email (Optional)'),
-                //   keyboardType: TextInputType.emailAddress,
-                // ),
                 TextFormField(
                   controller: _emailController,
                   decoration: InputDecoration(labelText: 'Email (Optional)'),
@@ -371,7 +338,6 @@ class _SecondScreenState extends State<SecondScreen> {
                     return null;
                   },
                 ),
-
                 SizedBox(height: 20),
                 _isSubmitting
                     ? CircularProgressIndicator()
@@ -442,15 +408,7 @@ class _SecondScreenState extends State<SecondScreen> {
             _isSubmitting = false;
           });
           _showErrorDialog('Record updated successfully.');
-        }
-        // else if (existsOnline) {
-        //   await saveFormDataSQLite(updateIfExists: true);
-        //   setState(() {
-        //     _isSubmitting = false;
-        //   });
-        //   _showErrorDialog('Record updated successfully.');
-        // }
-        else {
+        } else {
           await saveFormDataSQLite(updateIfExists: false);
           setState(() {
             _isSubmitting = false;
@@ -711,32 +669,4 @@ class _SecondScreenState extends State<SecondScreen> {
 
     await batch.commit();
   }
-
-  // void _syncDataWithFirestore() async {
-  //   final List<Map<String, dynamic>> records =
-  //       await _database.rawQuery('SELECT * FROM forms');
-  //
-  //   for (var record in records) {
-  //     final docRef =
-  //         FirebaseFirestore.instance.collection('forms').doc(record['phone']);
-  //     final existsOnline = (await docRef.get()).exists;
-  //
-  //     if (existsOnline) {
-  //       await docRef.update({
-  //         'fullName': record['fullName'],
-  //         'age': record['age'],
-  //         'profession': record['profession'],
-  //         'email': record['email'],
-  //       });
-  //     } else {
-  //       await docRef.set({
-  //         'phone': record['phone'],
-  //         'fullName': record['fullName'],
-  //         'age': record['age'],
-  //         'profession': record['profession'],
-  //         'email': record['email'],
-  //       });
-  //     }
-  //   }
-  // }
 }
